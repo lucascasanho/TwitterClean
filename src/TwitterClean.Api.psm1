@@ -47,13 +47,18 @@ function Get-TwitterCleanQueryValue {
 
     foreach ($pair in $Query.TrimStart('?').Split('&')) {
         if ([string]::IsNullOrWhiteSpace($pair)) { continue }
-        $parts = $pair.Split(@('='), 2)
-        $key = [Uri]::UnescapeDataString($parts[0].Replace('+', ' '))
+        $separatorIndex = $pair.IndexOf('=')
+        if ($separatorIndex -ge 0) {
+            $keyPart = $pair.Substring(0, $separatorIndex)
+            $valuePart = $pair.Substring($separatorIndex + 1)
+        }
+        else {
+            $keyPart = $pair
+            $valuePart = ''
+        }
+        $key = [Uri]::UnescapeDataString($keyPart.Replace('+', ' '))
         if ($key -ieq $Name) {
-            if ($parts.Count -gt 1) {
-                return [Uri]::UnescapeDataString($parts[1].Replace('+', ' '))
-            }
-            return ''
+            return [Uri]::UnescapeDataString($valuePart.Replace('+', ' '))
         }
     }
 
