@@ -72,3 +72,30 @@ window.YTD.following.part0 = [
 finally {
     Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+
+# Validates PowerShell syntax for the online launcher and OAuth module without network access.
+$apiModulePath = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\TwitterClean.Api.psm1'
+$onlineLauncherPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'TwitterClean-Online.ps1'
+
+foreach ($sourcePath in @($apiModulePath, $onlineLauncherPath)) {
+    $parseErrors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile($sourcePath, [ref]$null, [ref]$parseErrors)
+    if ($parseErrors.Count -gt 0) {
+        $messages = ($parseErrors | ForEach-Object { $_.Message }) -join '; '
+        throw "Erro de sintaxe em $sourcePath : $messages"
+    }
+}
+
+Import-Module -Name $apiModulePath -Force
+$pkce = New-TwitterCleanPkce
+if ($pkce.Verifier.Length -lt 43 -or $pkce.Challenge.Length -ne 43 -or $pkce.State.Length -lt 20) {
+    throw 'Os valores PKCE gerados não possuem o formato esperado.'
+}
+
+$formBody = ConvertTo-TwitterCleanFormBody -Values @{ client_id = 'abc+123'; redirect_uri = 'http://127.0.0.1:8787/callback/' }
+if ($formBody -notmatch 'client_id=abc%2B123' -or $formBody -notmatch 'redirect_uri=http%3A%2F%2F127%2E0%2E0%2E1%3A8787%2Fcallback%2F') {
+    throw "A codificação application/x-www-form-urlencoded não foi gerada como esperado: $formBody"
+}
+
+Write-Host 'Testes de sintaxe e OAuth PKCE passaram.' -ForegroundColor Green
