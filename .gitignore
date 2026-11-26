@@ -1,0 +1,15 @@
+# Arquivos privados baixados do X
+*.zip
+twitter-archive/
+x-archive/
+data/following*.js
+
+# Relatórios locais gerados pelo TwitterClean
+TwitterClean-Report-*/
+following-report.csv
+following-report.html
+following-report.json
+
+# Arquivos temporários e logs
+*.log
+*.tmp
