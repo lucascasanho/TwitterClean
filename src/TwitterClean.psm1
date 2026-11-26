@@ -28,7 +28,7 @@ function ConvertFrom-TwitterArchiveJs {
         throw "Não foi possível interpretar o JSON do arquivo do X: $($_.Exception.Message)"
     }
 
-    return ,$parsed
+    return $parsed
 }
 
 function Get-TwitterFollowingSourceFiles {
@@ -107,7 +107,7 @@ function Get-TwitterFollowingSourceFiles {
         throw 'Nenhum arquivo following.js foi encontrado. No arquivo do X, procure a pasta data.'
     }
 
-    return ,$sources
+    return $sources
 }
 
 function Get-TwitterFollowingRecords {
@@ -157,16 +157,16 @@ function Get-TwitterFollowingRecords {
             }
 
             $records += [pscustomobject]@{
-                AccountId       = $accountId
-                ProfileUrl      = $profileUrl
-                ArchiveUserLink = $archiveLink
+                AccountId        = $accountId
+                ProfileUrl       = $profileUrl
+                ArchiveUserLink  = $archiveLink
                 AvailabilityHint = $hint
-                SourceFile      = $source.Name
+                SourceFile       = $source.Name
             }
         }
     }
 
-    return ,$records
+    return $records
 }
 
 function New-TwitterCleanReport {
@@ -218,9 +218,8 @@ function New-TwitterCleanReport {
         Select-Object AccountId, ProfileUrl, ArchiveUserLink, AvailabilityHint, SourceFile |
         Export-Csv -LiteralPath $csvPath -NoTypeInformation -Encoding UTF8
 
-    $uniqueRecords |
-        ConvertTo-Json -Depth 5 |
-        Set-Content -LiteralPath $jsonPath -Encoding UTF8
+    $jsonContent = ConvertTo-Json -InputObject @($uniqueRecords) -Depth 5
+    Set-Content -LiteralPath $jsonPath -Value $jsonContent -Encoding UTF8
 
     $rowHtml = foreach ($record in $uniqueRecords) {
         $id = [System.Net.WebUtility]::HtmlEncode([string]$record.AccountId)
@@ -236,11 +235,21 @@ function New-TwitterCleanReport {
             '<span>Link indisponível: ID inválido</span>'
         }
 
-        $archiveCell = if (-not [string]::IsNullOrWhiteSpace($archiveLink)) {
+        $safeArchiveUri = $null
+        $isSafeArchiveLink = [System.Uri]::TryCreate($record.ArchiveUserLink, [System.UriKind]::Absolute, [ref]$safeArchiveUri)
+        if ($isSafeArchiveLink) {
+            $isSafeArchiveLink = ($safeArchiveUri.Scheme -in @('http', 'https')) -and
+                ($safeArchiveUri.Host -in @('twitter.com', 'www.twitter.com', 'x.com', 'www.x.com'))
+        }
+
+        $archiveCell = if ($isSafeArchiveLink) {
             "<a href=""$archiveLink"" target=""_blank"" rel=""noopener noreferrer"">Link do arquivo</a>"
         }
-        else {
+        elseif ([string]::IsNullOrWhiteSpace($archiveLink)) {
             '<span>Não consta</span>'
+        }
+        else {
+            '<span>Link não reconhecido</span>'
         }
 
         "<tr><td><code>$id</code></td><td>$profileCell</td><td>$archiveCell</td><td>$hint</td><td>$source</td></tr>"
@@ -305,14 +314,14 @@ $rows
     Set-Content -LiteralPath $htmlPath -Value $html -Encoding UTF8
 
     return [pscustomobject]@{
-        ArchiveRecords    = $records.Count
-        UniqueFollowing   = $uniqueRecords.Count
-        DuplicateRecords  = $duplicateRecords
+        ArchiveRecords      = $records.Count
+        UniqueFollowing     = $uniqueRecords.Count
+        DuplicateRecords    = $duplicateRecords
         MissingArchiveLinks = $missingLinks
-        CsvPath           = $csvPath
-        HtmlPath          = $htmlPath
-        JsonPath          = $jsonPath
-        OutputDirectory   = (Resolve-Path -LiteralPath $OutputDirectory).Path
+        CsvPath             = $csvPath
+        HtmlPath            = $htmlPath
+        JsonPath            = $jsonPath
+        OutputDirectory     = (Resolve-Path -LiteralPath $OutputDirectory).Path
     }
 }
 
