@@ -3,7 +3,7 @@
 param(
     [Parameter(Mandatory = $true, Position = 0)]
     [ValidateNotNullOrEmpty()]
-    [string]$ArchivePath,
+    [string[]]$ArchivePath,
 
     [Parameter(Mandatory = $false)]
     [ValidateRange(0, 2147483647)]
@@ -39,21 +39,32 @@ try {
     }
 
     Write-Host ''
-    Write-Host 'TwitterClean - análise local do arquivo do X' -ForegroundColor Cyan
-    Write-Host 'Lendo o arquivo. Nenhuma ação será executada na sua conta.' -ForegroundColor Gray
+    Write-Host 'TwitterClean - análise local dos arquivos do X' -ForegroundColor Cyan
+    Write-Host 'Nenhuma conexão com o X será feita. Nenhuma senha ou token será solicitado.' -ForegroundColor Gray
+    Write-Host "Origens informadas: $($ArchivePath.Count)"
     Write-Host ''
 
     $report = New-TwitterCleanReport @parameters
 
     Write-Host 'Análise concluída.' -ForegroundColor Green
-    Write-Host "Registros lidos:              $($report.ArchiveRecords)"
-    Write-Host "Contas/IDs únicos:            $($report.UniqueFollowing)"
-    Write-Host "Registros duplicados:         $($report.DuplicateRecords)"
-    Write-Host "Sem userLink no arquivo:      $($report.MissingArchiveLinks)"
+    Write-Host "Arquivos following.js encontrados: $($report.FollowingFilesFound)"
+    Write-Host "Registros lidos:                   $($report.ArchiveRecords)"
+    Write-Host "IDs únicos reunidos:               $($report.UniqueFollowing)"
+    Write-Host "Registros duplicados:              $($report.DuplicateRecords)"
+    Write-Host "Sem link válido no arquivo:        $($report.MissingArchiveLinks)"
+    Write-Host "IDs encontrados em uma origem:     $($report.ArchiveSourceOnlyAccounts)"
+
+    if ($null -ne $report.UnmatchedFollowingCount) {
+        Write-Host "Contador sem ID correspondente:     $($report.UnmatchedFollowingCount)"
+        Write-Host "IDs históricos acima do contador:  $($report.ArchiveCountExcess)"
+    }
+
     Write-Host ''
-    Write-Host "Relatório HTML: $($report.HtmlPath)" -ForegroundColor Cyan
-    Write-Host "Planilha CSV:   $($report.CsvPath)"
-    Write-Host "Dados JSON:     $($report.JsonPath)"
+    Write-Host "Relatório HTML:       $($report.HtmlPath)" -ForegroundColor Cyan
+    Write-Host "Lista consolidada:   $($report.CsvPath)"
+    Write-Host "Comparação de fontes: $($report.ComparisonCsvPath)"
+    Write-Host "IDs exclusivos:      $($report.ExclusiveIdsCsvPath)"
+    Write-Host "Dados JSON:          $($report.JsonPath)"
     Write-Host ''
 
     if (-not $NoOpenReport) {
