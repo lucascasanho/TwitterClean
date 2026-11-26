@@ -46,7 +46,7 @@ window.YTD.following.part0 = [
     }
 
     $jsonText = Get-Content -LiteralPath $result.JsonPath -Raw
-    $jsonRows = @(ConvertFrom-Json -InputObject $jsonText)
+    $jsonRows = ConvertFrom-Json -InputObject $jsonText
     if ($jsonRows.Count -ne 2) {
         throw "Esperado 2 registros no JSON; recebido $($jsonRows.Count)."
     }
