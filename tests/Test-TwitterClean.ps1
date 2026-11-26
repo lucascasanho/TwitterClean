@@ -45,7 +45,8 @@ window.YTD.following.part0 = [
         throw "Esperado 2 linhas únicas no CSV; recebido $($csvRows.Count)."
     }
 
-    $jsonRows = @(Get-Content -LiteralPath $result.JsonPath -Raw | ConvertFrom-Json)
+    $jsonText = Get-Content -LiteralPath $result.JsonPath -Raw
+    $jsonRows = @(ConvertFrom-Json -InputObject $jsonText)
     if ($jsonRows.Count -ne 2) {
         throw "Esperado 2 registros no JSON; recebido $($jsonRows.Count)."
     }
