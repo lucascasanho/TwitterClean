@@ -191,11 +191,12 @@ function Invoke-TwitterCleanOAuth {
         throw "O X não aceitou o código OAuth. Confira Client ID, Redirect URI e tipo Native App. Resposta: $detail"
     }
 
-    if ([string]::IsNullOrWhiteSpace([string]$tokenResponse.access_token)) {
+    $receivedAccessToken = Get-TwitterCleanPropertyValue -InputObject $tokenResponse -Name 'access_token'
+    if ([string]::IsNullOrWhiteSpace([string]$receivedAccessToken)) {
         throw 'A resposta OAuth não contém access_token.'
     }
 
-    return [string]$tokenResponse.access_token
+    return [string]$receivedAccessToken
 }
 
 function Invoke-TwitterCleanApiGet {
@@ -232,6 +233,18 @@ function Get-TwitterCleanErrorText {
     return ($parts -join '; ')
 }
 
+function Get-TwitterCleanPropertyValue {
+    param(
+        [Parameter(Mandatory = $false)]$InputObject,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    if ($null -eq $InputObject) { return $null }
+    $property = $InputObject.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $null }
+    return $property.Value
+}
+
 function Invoke-TwitterCleanOnlineDiagnostic {
     [CmdletBinding()]
     param(
@@ -251,14 +264,17 @@ function Invoke-TwitterCleanOnlineDiagnostic {
     Write-Host 'Autorização concluída. Consultando sua conta...' -ForegroundColor Green
 
     $meResponse = Invoke-TwitterCleanApiGet -Uri 'https://api.x.com/2/users/me?user.fields=id,name,username,public_metrics' -AccessToken $accessToken
-    if ($null -eq $meResponse.data -or [string]::IsNullOrWhiteSpace([string]$meResponse.data.id)) {
+    $me = Get-TwitterCleanPropertyValue -InputObject $meResponse -Name 'data'
+    $meId = Get-TwitterCleanPropertyValue -InputObject $me -Name 'id'
+    if ($null -eq $me -or [string]::IsNullOrWhiteSpace([string]$meId)) {
         throw 'A API do X não retornou os dados da conta autenticada.'
     }
 
-    $me = $meResponse.data
     $followingFieldCount = $null
-    if ($null -ne $me.public_metrics -and $null -ne $me.public_metrics.following_count) {
-        $followingFieldCount = [int]$me.public_metrics.following_count
+    $publicMetrics = Get-TwitterCleanPropertyValue -InputObject $me -Name 'public_metrics'
+    $followingMetric = Get-TwitterCleanPropertyValue -InputObject $publicMetrics -Name 'following_count'
+    if ($null -ne $followingMetric) {
+        $followingFieldCount = [int]$followingMetric
     }
 
     $users = @()
@@ -284,16 +300,18 @@ function Invoke-TwitterCleanOnlineDiagnostic {
 
         $pageNumber++
         Write-Host "Consultando página $pageNumber (limite total: $MaxAccounts perfis)..." -ForegroundColor Gray
-        $page = Invoke-TwitterCleanApiGet -Uri "https://api.x.com/2/users/$($me.id)/following?$query" -AccessToken $accessToken
+        $page = Invoke-TwitterCleanApiGet -Uri "https://api.x.com/2/users/$meId/following?$query" -AccessToken $accessToken
 
-        if ($null -ne $page.data) {
-            foreach ($user in @($page.data)) {
+        $pageData = Get-TwitterCleanPropertyValue -InputObject $page -Name 'data'
+        if ($null -ne $pageData) {
+            foreach ($user in @($pageData)) {
                 $users += $user
             }
         }
 
-        if ($null -ne $page.errors) {
-            foreach ($apiError in @($page.errors)) {
+        $pageErrors = Get-TwitterCleanPropertyValue -InputObject $page -Name 'errors'
+        if ($null -ne $pageErrors) {
+            foreach ($apiError in @($pageErrors)) {
                 $apiErrors += [pscustomobject]@{
                     ErrorText = (Get-TwitterCleanErrorText -ErrorObject $apiError)
                     Raw       = $apiError
@@ -301,14 +319,13 @@ function Invoke-TwitterCleanOnlineDiagnostic {
             }
         }
 
-        if ($null -ne $page.meta -and $null -ne $page.meta.result_count) {
-            $rawResultCount += [int]$page.meta.result_count
+        $pageMeta = Get-TwitterCleanPropertyValue -InputObject $page -Name 'meta'
+        $pageResultCount = Get-TwitterCleanPropertyValue -InputObject $pageMeta -Name 'result_count'
+        if ($null -ne $pageResultCount) {
+            $rawResultCount += [int]$pageResultCount
         }
 
-        $nextToken = $null
-        if ($null -ne $page.meta -and -not [string]::IsNullOrWhiteSpace([string]$page.meta.next_token)) {
-            $nextToken = [string]$page.meta.next_token
-        }
+        $nextToken = Get-TwitterCleanPropertyValue -InputObject $pageMeta -Name 'next_token'
 
         if ($users.Count -ge $MaxAccounts -and -not [string]::IsNullOrWhiteSpace([string]$nextToken)) {
             $truncated = $true
@@ -372,22 +389,23 @@ function Invoke-TwitterCleanOnlineDiagnostic {
     $htmlPath = Join-Path $OutputDirectory 'diagnostic.html'
 
     $accountRows = foreach ($user in $uniqueUsers) {
-        $username = [string]$user.username
+        $username = [string](Get-TwitterCleanPropertyValue -InputObject $user -Name 'username')
+        $userId = [string](Get-TwitterCleanPropertyValue -InputObject $user -Name 'id')
         $profileUrl = if (-not [string]::IsNullOrWhiteSpace($username)) {
             "https://x.com/$username"
         }
         else {
-            "https://x.com/i/user/$($user.id)"
+            "https://x.com/i/user/$userId"
         }
 
         [pscustomobject]@{
             RecordType = 'Retornado pela API'
-            AccountId = [string]$user.id
+            AccountId = $userId
             Username = $username
-            Name = [string]$user.name
+            Name = [string](Get-TwitterCleanPropertyValue -InputObject $user -Name 'name')
             ProfileUrl = $profileUrl
-            Protected = $user.protected
-            Verified = $user.verified
+            Protected = (Get-TwitterCleanPropertyValue -InputObject $user -Name 'protected')
+            Verified = (Get-TwitterCleanPropertyValue -InputObject $user -Name 'verified')
             Status = 'Perfil retornado pelo endpoint de Following'
             ApiError = ''
         }
@@ -428,11 +446,13 @@ function Invoke-TwitterCleanOnlineDiagnostic {
     $allRows | Export-Csv -LiteralPath $csvPath -NoTypeInformation -Encoding UTF8
     (ConvertTo-Json -InputObject @($apiErrors) -Depth 12) | Set-Content -LiteralPath $errorsPath -Encoding UTF8
 
+    $authenticatedUsername = [string](Get-TwitterCleanPropertyValue -InputObject $me -Name 'username')
+    $authenticatedName = [string](Get-TwitterCleanPropertyValue -InputObject $me -Name 'name')
     $summary = [pscustomobject]@{
         AuthenticatedUser = [pscustomobject]@{
-            Id = [string]$me.id
-            Username = [string]$me.username
-            Name = [string]$me.name
+            Id = [string]$meId
+            Username = $authenticatedUsername
+            Name = $authenticatedName
         }
         ProfileFollowingCount = $followingFieldCount
         DisplayedFollowingCount = $DisplayedFollowingCount
@@ -461,24 +481,27 @@ function Invoke-TwitterCleanOnlineDiagnostic {
     }
     $json | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
 
-    $safeUser = [System.Net.WebUtility]::HtmlEncode("@$($me.username)")
+    $safeUser = [System.Net.WebUtility]::HtmlEncode("@$authenticatedUsername")
     $metricText = if ($null -eq $followingFieldCount) { 'Não informado pela API' } else { [string]$followingFieldCount }
     $displayText = if ($null -eq $DisplayedFollowingCount) { 'Não informado' } else { [string]$DisplayedFollowingCount }
     $differenceText = if ($null -eq $apiMetricDifference) { 'Não calculada' } else { [string]$apiMetricDifference }
     $truncatedText = if ($truncated) { 'SIM - limite atingido; lista incompleta' } else { 'Não' }
 
     $userTableRows = foreach ($user in $uniqueUsers) {
-        $id = [System.Net.WebUtility]::HtmlEncode([string]$user.id)
-        $username = [System.Net.WebUtility]::HtmlEncode([string]$user.username)
-        $name = [System.Net.WebUtility]::HtmlEncode([string]$user.name)
-        $url = if (-not [string]::IsNullOrWhiteSpace([string]$user.username)) {
-            "https://x.com/$([Uri]::EscapeDataString([string]$user.username))"
+        $id = [System.Net.WebUtility]::HtmlEncode([string](Get-TwitterCleanPropertyValue -InputObject $user -Name 'id'))
+        $usernameValue = [string](Get-TwitterCleanPropertyValue -InputObject $user -Name 'username')
+        $username = [System.Net.WebUtility]::HtmlEncode($usernameValue)
+        $name = [System.Net.WebUtility]::HtmlEncode([string](Get-TwitterCleanPropertyValue -InputObject $user -Name 'name'))
+        $url = if (-not [string]::IsNullOrWhiteSpace($usernameValue)) {
+            "https://x.com/$([Uri]::EscapeDataString($usernameValue))"
         }
         else {
             "https://x.com/i/user/$id"
         }
-        $protectedText = if ($user.protected) { 'Sim' } else { 'Não' }
-        $verifiedText = if ($user.verified) { 'Sim' } else { 'Não' }
+        $protectedValue = Get-TwitterCleanPropertyValue -InputObject $user -Name 'protected'
+        $verifiedValue = Get-TwitterCleanPropertyValue -InputObject $user -Name 'verified'
+        $protectedText = if ($protectedValue) { 'Sim' } else { 'Não' }
+        $verifiedText = if ($verifiedValue) { 'Sim' } else { 'Não' }
         "<tr><td><code>$id</code></td><td><a href=""$url"" target=""_blank"" rel=""noopener noreferrer"">@$username</a></td><td>$name</td><td>$protectedText</td><td>$verifiedText</td></tr>"
     }
 
@@ -549,7 +572,7 @@ $([string]::Join([Environment]::NewLine, $archiveTableRows))
     Set-Content -LiteralPath $htmlPath -Value $html -Encoding UTF8
 
     return [pscustomobject]@{
-        Username = [string]$me.username
+        Username = $authenticatedUsername
         ApiFollowingCount = $followingFieldCount
         ReturnedAccounts = $returnedCount
         ApiErrorCount = $apiErrors.Count
