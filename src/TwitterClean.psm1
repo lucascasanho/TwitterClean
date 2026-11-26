@@ -216,6 +216,7 @@ function New-TwitterCleanReport {
         [string]$OutputDirectory
     )
 
+    $sources = @(Get-TwitterFollowingSourceFiles -ArchivePath $ArchivePath)
     $records = @(Get-TwitterFollowingRecords -ArchivePath $ArchivePath)
 
     # Merge repeated IDs across files and snapshots. Prefer a valid X profile link
