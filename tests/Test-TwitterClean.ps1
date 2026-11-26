@@ -45,8 +45,29 @@ window.YTD.following.part0 = [
         throw "Esperado 2 linhas únicas no CSV; recebido $($csvRows.Count)."
     }
 
+    $jsonRows = @(Get-Content -LiteralPath $result.JsonPath -Raw | ConvertFrom-Json)
+    if ($jsonRows.Count -ne 2) {
+        throw "Esperado 2 registros no JSON; recebido $($jsonRows.Count)."
+    }
+
+    # Também valida a leitura do ZIP completo, no caminho data/following.js.
+    $archiveRoot = Join-Path $testRoot 'archive'
+    $archiveData = Join-Path $archiveRoot 'data'
+    New-Item -ItemType Directory -Path $archiveData -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $archiveData 'following.js') -Value $sample -Encoding UTF8
+
+    $zipPath = Join-Path $testRoot 'sample-x-archive.zip'
+    Compress-Archive -Path (Join-Path $archiveRoot '*') -DestinationPath $zipPath -Force
+
+    $zipReportPath = Join-Path $testRoot 'zip-report'
+    $zipResult = New-TwitterCleanReport -ArchivePath $zipPath -OutputDirectory $zipReportPath
+    if ($zipResult.UniqueFollowing -ne 2 -or $zipResult.MissingArchiveLinks -ne 1) {
+        throw 'A leitura do ZIP não produziu os resultados esperados.'
+    }
+
     Write-Host 'Todos os testes de fumaça passaram.' -ForegroundColor Green
-    Write-Host "Registros: $($result.ArchiveRecords); IDs únicos: $($result.UniqueFollowing); duplicados: $($result.DuplicateRecords)."
+    Write-Host "Arquivo JS: $($result.ArchiveRecords) registros; $($result.UniqueFollowing) IDs únicos."
+    Write-Host "Arquivo ZIP: $($zipResult.ArchiveRecords) registros; $($zipResult.UniqueFollowing) IDs únicos."
 }
 finally {
     Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
