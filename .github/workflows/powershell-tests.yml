@@ -13,14 +13,14 @@ permissions:
 jobs:
   smoke-tests:
     runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shell: [powershell, pwsh]
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Run smoke tests
-        shell: ${{ matrix.shell }}
+      - name: Test Windows PowerShell 5.1
+        shell: powershell
+        run: ./tests/Test-TwitterClean.ps1
+
+      - name: Test PowerShell 7
+        shell: pwsh
         run: ./tests/Test-TwitterClean.ps1
