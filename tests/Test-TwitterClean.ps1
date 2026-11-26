@@ -94,7 +94,7 @@ if ($pkce.Verifier.Length -lt 43 -or $pkce.Challenge.Length -ne 43 -or $pkce.Sta
 }
 
 $formBody = ConvertTo-TwitterCleanFormBody -Values @{ client_id = 'abc+123'; redirect_uri = 'http://127.0.0.1:8787/callback/' }
-if ($formBody -notmatch 'client_id=abc%2B123' -or $formBody -notmatch 'redirect_uri=http%3A%2F%2F127%2E0%2E0%2E1%3A8787%2Fcallback%2F') {
+if ($formBody -notmatch 'client_id=abc%2B123' -or $formBody -notmatch 'redirect_uri=http%3A%2F%2F127.0.0.1%3A8787%2Fcallback%2F') {
     throw "A codificação application/x-www-form-urlencoded não foi gerada como esperado: $formBody"
 }
 
