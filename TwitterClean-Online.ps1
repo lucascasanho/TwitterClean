@@ -43,7 +43,8 @@ try {
         throw 'O Client ID é obrigatório.'
     }
 
-    if (-not $PSBoundParameters.ContainsKey('DisplayedFollowingCount')) {
+    $hasDisplayedFollowingCount = $PSBoundParameters.ContainsKey('DisplayedFollowingCount')
+    if (-not $hasDisplayedFollowingCount) {
         $countText = Read-Host 'Quantas contas o contador do seu perfil diz que você segue? (ex.: 50; Enter para ignorar)'
         if (-not [string]::IsNullOrWhiteSpace($countText)) {
             $parsedCount = 0
@@ -51,6 +52,7 @@ try {
                 throw 'Informe um número inteiro válido para o contador.'
             }
             $DisplayedFollowingCount = $parsedCount
+            $hasDisplayedFollowingCount = $true
         }
     }
 
@@ -77,7 +79,7 @@ try {
         MaxAccounts = $MaxAccounts
     }
 
-    if ($PSBoundParameters.ContainsKey('DisplayedFollowingCount') -and $null -ne $DisplayedFollowingCount) {
+    if ($hasDisplayedFollowingCount -and $null -ne $DisplayedFollowingCount) {
         $parameters.DisplayedFollowingCount = $DisplayedFollowingCount
     }
     if (-not [string]::IsNullOrWhiteSpace($ArchivePath)) {
